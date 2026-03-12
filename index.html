@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>vs-cli — terminal editor</title>
+  <meta name="description" content="A terminal code editor that doesn't suck (much). One file. One dependency." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬢</text></svg>" />
+  <style>
+    /* ---- reset ---- */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ---- fonts ---- */
+    @import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600;700&family=Source+Sans+3:wght@400;600&display=swap');
+
+    /* ---- palette (kernel.org-ish dark olive + terminal green) ---- */
+    :root {
+      --bg:        #1a1c18;
+      --bg2:       #1f2119;
+      --bg3:       #252720;
+      --border:    #363830;
+      --border2:   #2c2e28;
+      --text:      #c8cab8;
+      --text2:     #8a8c7c;
+      --text3:     #5a5c50;
+      --green:     #7aab52;
+      --green2:    #5a8a38;
+      --green3:    #3a6020;
+      --yellow:    #c8a84a;
+      --red:       #c05050;
+      --cyan:      #4a9eab;
+      --header-bg: #141610;
+      --link:      #7aab52;
+      --link-hover:#9acb72;
+      --code-bg:   #141610;
+      --mono:      'Source Code Pro', 'Courier New', monospace;
+      --sans:      'Source Sans 3', 'Verdana', sans-serif;
+    }
+
+    html { font-size: 14px; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    a { color: var(--link); text-decoration: none; }
+    a:hover { color: var(--link-hover); text-decoration: underline; }
+
+    /* ---- header ---- */
+    #banner {
+      background: var(--header-bg);
+      border-bottom: 2px solid var(--green3);
+      padding: 0;
+    }
+    #banner .inner {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+    }
+    #tux-block {
+      background: var(--green3);
+      width: 56px;
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+      color: var(--green);
+    }
+    #banner h1 {
+      padding: 12px 20px;
+      font-family: var(--mono);
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--green);
+      letter-spacing: -0.5px;
+    }
+    #banner h1 span { color: var(--text2); }
+    #banner nav {
+      margin-left: auto;
+      display: flex;
+      align-items: stretch;
+    }
+    #banner nav a {
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--text2);
+      border-left: 1px solid var(--border2);
+      transition: background 0.1s, color 0.1s;
+    }
+    #banner nav a:hover {
+      background: var(--bg3);
+      color: var(--green);
+      text-decoration: none;
+    }
+
+    /* ---- layout ---- */
+    #wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 220px;
+      grid-template-rows: auto auto;
+      gap: 0;
+      padding: 0;
+    }
+
+    /* ---- main content ---- */
+    #main {
+      border-right: 1px solid var(--border);
+      padding: 20px 24px 20px 0;
+    }
+
+    /* ---- sidebar ---- */
+    #sidebar {
+      padding: 20px 0 20px 20px;
+    }
+
+    /* ---- terminal hero ---- */
+    #hero {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.5;
+      padding: 16px;
+      margin-bottom: 20px;
+      overflow: auto;
+    }
+    #hero .titlebar {
+      color: var(--text2);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+      font-size: 0.72rem;
+    }
+    .hl-kw   { color: #5ab0d0; }
+    .hl-str  { color: #c8843c; }
+    .hl-num  { color: #8ab870; }
+    .hl-cmt  { color: var(--text3); font-style: italic; }
+    .hl-fn   { color: #c8c040; }
+    .hl-typ  { color: var(--green); }
+    .cursor  {
+      display: inline-block;
+      background: var(--text);
+      width: 8px;
+      height: 13px;
+      vertical-align: text-bottom;
+      animation: blink 1.1s step-end infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    .ln { color: var(--text3); display: inline-block; width: 2.2em; text-align: right; margin-right: 10px; user-select: none; }
+    .git-add { color: var(--green); }
+    .git-mod { color: var(--yellow); }
+
+    /* ---- section boxes ---- */
+    .box {
+      border: 1px solid var(--border);
+      margin-bottom: 18px;
+    }
+    .box-title {
+      background: var(--bg3);
+      border-bottom: 1px solid var(--border);
+      padding: 5px 12px;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--green);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .box-body {
+      padding: 12px 14px;
+      font-size: 0.85rem;
+    }
+
+    /* ---- releases table ---- */
+    #releases {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+    }
+    #releases th {
+      background: var(--bg3);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 10px;
+      text-align: left;
+      color: var(--text2);
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    #releases td {
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border2);
+      vertical-align: middle;
+    }
+    #releases tr:last-child td { border-bottom: none; }
+    #releases tr:hover td { background: var(--bg3); }
+    .tag-stable { color: var(--green); font-weight: 700; }
+    .tag-main   { color: var(--cyan); font-weight: 700; }
+    .tag-lts    { color: var(--yellow); }
+    .tag-next   { color: var(--text3); }
+    .tag-date   { color: var(--text3); font-size: 0.75rem; }
+
+    /* ---- keybindings table ---- */
+    #keys {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    #keys td {
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--border2);
+      vertical-align: top;
+    }
+    #keys tr:last-child td { border-bottom: none; }
+    #keys .key {
+      font-family: var(--mono);
+      color: var(--yellow);
+      white-space: nowrap;
+      font-size: 0.78rem;
+    }
+    #keys .desc { color: var(--text2); font-size: 0.8rem; }
+    #keys tr:hover td { background: var(--bg3); }
+
+    /* ---- install block ---- */
+    .install-cmd {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--cyan);
+      padding: 10px 14px;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      color: var(--cyan);
+      margin-bottom: 10px;
+    }
+    .install-cmd .prompt { color: var(--text3); }
+    .install-cmd .cmd { color: var(--text); }
+
+    /* ---- feature list ---- */
+    .feat-list {
+      list-style: none;
+      font-size: 0.84rem;
+    }
+    .feat-list li {
+      padding: 4px 0;
+      border-bottom: 1px solid var(--border2);
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      color: var(--text);
+    }
+    .feat-list li:last-child { border-bottom: none; }
+    .feat-list .marker {
+      color: var(--green);
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      flex-shrink: 0;
+    }
+
+    /* ---- sidebar boxes ---- */
+    .sb-box {
+      border: 1px solid var(--border);
+      margin-bottom: 14px;
+    }
+    .sb-title {
+      background: var(--bg3);
+      border-bottom: 1px solid var(--border);
+      padding: 5px 10px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .sb-body {
+      padding: 10px;
+      font-size: 0.82rem;
+    }
+    .sb-body ul { list-style: none; }
+    .sb-body li {
+      padding: 3px 0;
+      border-bottom: 1px solid var(--border2);
+    }
+    .sb-body li:last-child { border-bottom: none; }
+    .sb-body a { font-size: 0.82rem; }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+    }
+    .stat-cell {
+      background: var(--bg2);
+      padding: 8px 10px;
+      text-align: center;
+    }
+    .stat-num {
+      font-family: var(--mono);
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--green);
+      display: block;
+    }
+    .stat-lbl {
+      font-size: 0.68rem;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ---- gutter demo ---- */
+    .gutter-demo {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      margin-bottom: 5px;
+    }
+    .gutter-demo .g { width: 10px; text-align: center; }
+
+    /* ---- footer ---- */
+    footer {
+      border-top: 2px solid var(--border);
+      background: var(--header-bg);
+      margin-top: 0;
+    }
+    footer .inner {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 14px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--text3);
+      font-family: var(--mono);
+    }
+    footer a { color: var(--text3); }
+    footer a:hover { color: var(--link); }
+
+    /* ---- desc text ---- */
+    .desc-text {
+      font-size: 0.88rem;
+      color: var(--text);
+      line-height: 1.7;
+      margin-bottom: 14px;
+    }
+    .desc-text strong { color: var(--green); font-family: var(--mono); }
+
+    /* ---- tagline ---- */
+    .tagline {
+      font-family: var(--mono);
+      font-size: 1rem;
+      color: var(--text);
+      padding: 10px 0 14px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 18px;
+    }
+    .tagline em { color: var(--text3); font-style: normal; }
+
+    /* ---- scrollbar ---- */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); }
+  </style>
+</head>
+<body>
+
+<header id="banner">
+  <div class="inner">
+    <div id="tux-block">⬢</div>
+    <h1><a href="#">vs-cli</a> <span>— a terminal editor that doesn't suck (much)</span></h1>
+    <nav>
+      <a href="#install">Install</a>
+      <a href="#features">Features</a>
+      <a href="#keys">Keys</a>
+      <a href="https://github.com/yourname/vs-cli">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div id="wrap">
+
+  <!-- ==================== MAIN ==================== -->
+  <main id="main">
+
+    <div class="tagline">
+      <code>pip install blessed &amp;&amp; python vs_cli.py .</code>
+      <em> — that's it.</em>
+    </div>
+
+    <!-- terminal preview -->
+    <div class="box">
+      <div class="box-title">▸ Editor preview</div>
+      <div id="hero">
+        <div class="titlebar">
+          vs-cli  —  main.py*  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          INSERT  ⎇ main  saved — main.py &nbsp;&nbsp;&nbsp;&nbsp; Ln 12, Col 1  4spc  PY  UTF-8
+        </div>
+<pre><span class="ln"> 1</span><span class="git-add">▌</span> <span class="hl-kw">import</span> os, sys, re
+<span class="ln"> 2</span>  <span class="hl-kw">import</span> subprocess
+<span class="ln"> 3</span>  <span class="hl-kw">from</span> pathlib <span class="hl-kw">import</span> <span class="hl-typ">Path</span>
+<span class="ln"> 4</span>  <span class="hl-kw">from</span> collections <span class="hl-kw">import</span> deque
+<span class="ln"> 5</span>
+<span class="ln"> 6</span><span class="git-mod">▌</span> <span class="hl-cmt"># undo stack — snapshot before every destructive op</span>
+<span class="ln"> 7</span>  <span class="hl-typ">_UNDO_LIMIT</span> = <span class="hl-num">500</span>
+<span class="ln"> 8</span>
+<span class="ln"> 9</span>  <span class="hl-kw">class</span> <span class="hl-typ">EditorState</span>:
+<span class="ln">10</span>      <span class="hl-kw">def</span> <span class="hl-fn">__init__</span>(<span class="hl-kw">self</span>):
+<span class="ln">11</span>          <span class="hl-kw">self</span>.lines = [<span class="hl-str">''</span>]
+<span class="ln">12</span>          <span class="hl-kw">self</span>.cy = <span class="hl-kw">self</span>.cx = <span class="hl-num">0</span><span class="cursor"></span></pre>
+      </div>
+    </div>
+
+    <!-- description -->
+    <div class="desc-text">
+      <strong>vs-cli</strong> is a single Python file (~700 lines) that gives you a VS Code-flavored editing experience
+      in any terminal. File explorer, git gutter, syntax highlighting, undo/redo, bracket matching, integrated terminal,
+      command palette, quick-open, global grep, outline view, zen mode — the works.
+      It runs anywhere Python 3.10+ runs, with one pip install.
+    </div>
+
+    <!-- install -->
+    <div class="box" id="install">
+      <div class="box-title">▸ Installation</div>
+      <div class="box-body">
+        <div class="install-cmd"><span class="prompt">$ </span><span class="cmd">pip install blessed</span></div>
+        <div class="install-cmd"><span class="prompt">$ </span><span class="cmd">python vs_cli.py [file or directory]</span></div>
+        <p style="font-size:0.8rem;color:var(--text2);margin-top:8px;">
+          Requires Python 3.10+. No other dependencies. Works on Linux, macOS, and over SSH.
+          Download: <a href="https://github.com/yourname/vs-cli/raw/main/vs_cli.py">vs_cli.py</a>
+        </p>
+      </div>
+    </div>
+
+    <!-- features -->
+    <div class="box" id="features">
+      <div class="box-title">▸ Features</div>
+      <div class="box-body">
+        <ul class="feat-list">
+          <li><span class="marker">[+]</span> Syntax highlighting — Python, JS/TS, JSON, Markdown</li>
+          <li><span class="marker">[+]</span> Undo / redo (Ctrl+Z / Ctrl+Y) — 500-entry snapshot stack</li>
+          <li><span class="marker">[+]</span> Bracket auto-close and visual bracket matching</li>
+          <li><span class="marker">[+]</span> Auto-indent detection — tabs vs spaces, width detection</li>
+          <li><span class="marker">[+]</span> Smart newline with auto-indent after <code style="font-size:0.77rem;color:var(--cyan)">:</code> and <code style="font-size:0.77rem;color:var(--cyan)">{</code></li>
+          <li><span class="marker">[+]</span> Git gutter — added / modified / deleted indicators per line</li>
+          <li><span class="marker">[+]</span> Quick open (Ctrl+P) — fuzzy file search across project</li>
+          <li><span class="marker">[+]</span> Global grep (Ctrl+F) — project-wide search via <code style="font-size:0.77rem;color:var(--cyan)">grep -rn</code></li>
+          <li><span class="marker">[+]</span> Find & replace (Alt+R) — replace-all with undo</li>
+          <li><span class="marker">[+]</span> Outline view (Ctrl+O) — functions and classes for py/js/ts</li>
+          <li><span class="marker">[+]</span> Sticky scroll — enclosing function pinned to top of viewport</li>
+          <li><span class="marker">[+]</span> Zen mode (F11) — hides sidebar and status bar</li>
+          <li><span class="marker">[+]</span> Integrated terminal panel (F9→A) — run commands inline</li>
+          <li><span class="marker">[+]</span> Command palette (Shift+F6) — searchable command list</li>
+          <li><span class="marker">[+]</span> File explorer with expand/collapse and parent navigation</li>
+          <li><span class="marker">[+]</span> Word jump (Ctrl+← / Ctrl+→)</li>
+          <li><span class="marker">[+]</span> Smart home key — toggle between indent and column 0</li>
+          <li><span class="marker">[+]</span> Flicker-free full-screen rendering via single write()</li>
+          <li><span class="marker">[+]</span> Color auto-detection — gracefully disables on unsupported terms</li>
+          <li><span class="marker">[ ]</span> <span style="color:var(--text3)">Multiple buffers / tabs — not yet</span></li>
+          <li><span class="marker">[ ]</span> <span style="color:var(--text3)">LSP / autocomplete — not planned</span></li>
+          <li><span class="marker">[ ]</span> <span style="color:var(--text3)">Plugin system — not planned</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- keybindings -->
+    <div class="box" id="keys">
+      <div class="box-title">▸ Keybindings</div>
+      <div class="box-body" style="padding:0;">
+        <table id="keys">
+          <thead>
+            <tr>
+              <th style="width:140px;">Key</th>
+              <th>Action</th>
+              <th style="width:90px;color:var(--text3);">Context</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="key">Ctrl+S</td><td class="desc">Save file</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">Ctrl+Q</td><td class="desc">Quit</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">Ctrl+Z</td><td class="desc">Undo</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">Ctrl+Y</td><td class="desc">Redo</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">F5</td><td class="desc">Focus explorer</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">F6</td><td class="desc">Focus editor</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">Shift+F6</td><td class="desc">Command palette</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">F11</td><td class="desc">Toggle zen mode</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">F9 → A</td><td class="desc">Open terminal panel</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">F9 → C</td><td class="desc">Close terminal panel</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">Ctrl+P</td><td class="desc">Quick open file</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">Ctrl+F</td><td class="desc">Global grep</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">Ctrl+O</td><td class="desc">Outline / symbols</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">Alt+S</td><td class="desc">Search in file</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">Alt+W</td><td class="desc">Go to folder</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">Alt+R</td><td class="desc">Find and replace</td><td class="tag-date">global</td></tr>
+            <tr><td class="key">Ctrl+← / →</td><td class="desc">Word jump</td><td class="tag-date">editor</td></tr>
+            <tr><td class="key">Home</td><td class="desc">Smart home (indent ↔ col 0)</td><td class="tag-date">editor</td></tr>
+            <tr><td class="key">End</td><td class="desc">End of line</td><td class="tag-date">editor</td></tr>
+            <tr><td class="key">PgUp / PgDn</td><td class="desc">Scroll by page</td><td class="tag-date">editor</td></tr>
+            <tr><td class="key">Tab</td><td class="desc">Indent (auto-detected)</td><td class="tag-date">editor</td></tr>
+            <tr><td class="key">Enter</td><td class="desc">Newline + smart indent</td><td class="tag-date">editor</td></tr>
+            <tr><td class="key">Backspace</td><td class="desc">Delete char / bracket pair</td><td class="tag-date">editor</td></tr>
+            <tr><td class="key">↑ ↓ Enter</td><td class="desc">Navigate / open</td><td class="tag-date">explorer</td></tr>
+            <tr><td class="key">Backspace</td><td class="desc">Parent directory</td><td class="tag-date">explorer</td></tr>
+            <tr><td class="key">Esc</td><td class="desc">Focus editor</td><td class="tag-date">terminal</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- design notes -->
+    <div class="box">
+      <div class="box-title">▸ Design notes</div>
+      <div class="box-body">
+        <p class="desc-text" style="margin-bottom:8px;">
+          The entire screen is redrawn every frame as a single <code style="font-size:0.8rem;color:var(--cyan)">sys.stdout.write()</code> call.
+          No diff, no partial updates. At 20fps this costs under 2ms per frame — the simplicity is worth it.
+        </p>
+        <p class="desc-text" style="margin-bottom:8px;">
+          The undo stack stores full line snapshots in a <code style="font-size:0.8rem;color:var(--cyan)">deque(maxlen=500)</code>.
+          Snapshots are deduplicated to avoid filling the stack during held-key repetition.
+        </p>
+        <p class="desc-text" style="margin-bottom:0;">
+          The terminal panel is <em>not</em> a PTY. It uses blocking <code style="font-size:0.8rem;color:var(--cyan)">subprocess.run()</code>.
+          Interactive programs like <code style="font-size:0.8rem;color:var(--cyan)">vim</code>, <code style="font-size:0.8rem;color:var(--cyan)">htop</code>, or the Python REPL
+          will not work. This is a deliberate tradeoff for zero complexity.
+        </p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ==================== SIDEBAR ==================== -->
+  <aside id="sidebar">
+
+    <!-- stats -->
+    <div class="sb-box">
+      <div class="sb-title">Project stats</div>
+      <div class="stat-grid">
+        <div class="stat-cell">
+          <span class="stat-num">1</span>
+          <span class="stat-lbl">file</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-num">~700</span>
+          <span class="stat-lbl">lines</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-num">1</span>
+          <span class="stat-lbl">dependency</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-num">3.10+</span>
+          <span class="stat-lbl">Python</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- download -->
+    <div class="sb-box">
+      <div class="sb-title">Download</div>
+      <div class="sb-body">
+        <ul>
+          <li><a href="https://github.com/yourname/vs-cli/raw/main/vs_cli.py">vs_cli.py</a> <span style="color:var(--text3);font-size:0.75rem;">— latest</span></li>
+          <li><a href="https://github.com/yourname/vs-cli/archive/refs/heads/main.zip">.zip archive</a></li>
+          <li><a href="https://github.com/yourname/vs-cli">GitHub repository</a></li>
+          <li><a href="https://github.com/yourname/vs-cli/blob/main/README.md">README</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- gutter legend -->
+    <div class="sb-box">
+      <div class="sb-title">Git gutter</div>
+      <div class="sb-body">
+        <div class="gutter-demo"><span class="g git-add">▌</span><span style="color:var(--text2);">line added</span></div>
+        <div class="gutter-demo"><span class="g git-mod">▌</span><span style="color:var(--text2);">line modified</span></div>
+        <div class="gutter-demo"><span class="g" style="color:var(--red);">▾</span><span style="color:var(--text2);">deletion below</span></div>
+        <p style="font-size:0.75rem;color:var(--text3);margin-top:8px;">Refreshed on open and save. Requires <code style="font-size:0.72rem;">git</code> on $PATH.</p>
+      </div>
+    </div>
+
+    <!-- language support -->
+    <div class="sb-box">
+      <div class="sb-title">Language support</div>
+      <div class="sb-body">
+        <ul>
+          <li><a style="color:var(--green);">Python</a> <span style="color:var(--text3);font-size:0.75rem;">— full highlight</span></li>
+          <li><a style="color:var(--green);">JS / TS / JSX / TSX</a> <span style="color:var(--text3);font-size:0.75rem;">— full</span></li>
+          <li><a style="color:var(--green);">JSON</a> <span style="color:var(--text3);font-size:0.75rem;">— full highlight</span></li>
+          <li><a style="color:var(--green);">Markdown</a> <span style="color:var(--text3);font-size:0.75rem;">— full highlight</span></li>
+          <li><span style="color:var(--text3);">sh, html, css, rs, go, rb…</span> <span style="color:var(--text3);font-size:0.75rem;">— icon only</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- protocols -->
+    <div class="sb-box">
+      <div class="sb-title">Access</div>
+      <div class="sb-body">
+        <ul>
+          <li><a href="https://github.com/yourname/vs-cli">HTTPS</a> <span style="color:var(--text3);font-size:0.75rem;">github.com</span></li>
+          <li><a href="https://github.com/yourname/vs-cli">GIT</a> <span style="color:var(--text3);font-size:0.75rem;">git clone</span></li>
+          <li><a href="https://pypi.org/project/blessed/">PyPI</a> <span style="color:var(--text3);font-size:0.75rem;">blessed dep</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- other resources -->
+    <div class="sb-box">
+      <div class="sb-title">Other resources</div>
+      <div class="sb-body">
+        <ul>
+          <li><a href="https://pypi.org/project/blessed/">blessed on PyPI</a></li>
+          <li><a href="https://docs.python.org/3/library/pathlib.html">pathlib docs</a></li>
+          <li><a href="https://docs.python.org/3/library/subprocess.html">subprocess docs</a></li>
+          <li><a href="https://www.kernel.org/">kernel.org</a></li>
+          <li><a href="https://git-scm.com/">git-scm.com</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- license -->
+    <div class="sb-box">
+      <div class="sb-title">License</div>
+      <div class="sb-body">
+        <p style="font-size:0.8rem;color:var(--text2);">MIT License. Do what you want. Attribution appreciated but not required.</p>
+      </div>
+    </div>
+
+  </aside>
+
+</div><!-- /#wrap -->
+
+<footer>
+  <div class="inner">
+    <span>vs-cli — a terminal editor that doesn't suck (much)</span>
+    <span>
+      <a href="https://github.com/yourname/vs-cli">GitHub</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/yourname/vs-cli/raw/main/vs_cli.py">Download</a>
+      &nbsp;·&nbsp;
+      MIT License
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>
