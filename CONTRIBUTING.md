@@ -9,6 +9,7 @@ First off, thank you for considering contributing to `vs-cli`!
 2. **Line Limit:** We aim to keep the code under **~1200 lines**. Efficiency is key.
 3. **No New Dependencies:** `blessed` is our only third-party dependency. Do not add others.
 4. **No Config Files:** Configuration should be done by editing the source or via environment variables.
+5. **1200 Line Rule:** If 1200 lines is too few, you can split it into different files and push them together.
 
 ## How to Contribute
 - **Bug Reports:** Open an issue with your OS, terminal emulator, and Python version.
