@@ -1,4 +1,5 @@
 # vs-cli
+<img width="165" height="160" alt="Screenshot_2026-03-12_21-22-05" src="https://github.com/user-attachments/assets/4e4c58d5-b43c-4615-b805-d42c378dff95" />
 
 > A terminal code editor that doesn't suck (much). One dependency. Runs anywhere Python runs.
 
