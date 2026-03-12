@@ -754,6 +754,8 @@ Good candidates for contribution:
 - Line count and file size in the status bar
 - Configurable key bindings via environment variables or a dotfile
 
+# WARNING vs-cli is a BlueArch Project!
+
 **The single-file constraint is intentional and non-negotiable.** The entire value proposition of vs-cli is that you can `curl` one file onto a server and have a working editor. Please respect this.
 
 ---
