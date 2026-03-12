@@ -1,609 +1,767 @@
 # vs-cli
 
-a terminal-based code editor that fits in a single Python file.
-no LSP, no plugins, no config files, no 400MB electron runtime.
-just a text editor that runs in your terminal and doesn't make you want to quit your job.
+> A terminal code editor that doesn't suck (much). One dependency. Runs anywhere Python runs.
 
 ```
- vs-cli  —  main.py                                                    
- EXPLORER           │   1 import os, sys, re                           
-▸ src               │   2 from pathlib import Path                     
-PY main.py          │   3                                              
-PY utils.py         │   4 def main():                                  
-{} config.json      │   5     print("hello")                          
-MD README.md        │   6                                              
-                    │                                                  
-  INSERT  ⎇ main  saved — main.py          Ln 4, Col 1  PY  UTF-8    
+pip install blessed
+python vs_cli.py [file or directory]
 ```
+
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![dependency: blessed](https://img.shields.io/badge/dependency-blessed-green.svg)](https://pypi.org/project/blessed/)
+[![license: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)]()
 
 ---
 
-## why does this exist
+## Table of Contents
 
-i needed an editor i could drop onto a server over SSH, open a file,
-make a quick change, and get out. without installing node, without
-configuring vim keybindings i'll forget in 3 days, without waiting for
-a language server to warm up.
-
-`nano` is fine but it looks like 1991. `vim` is powerful but requires
-a PhD to exit. `micro` is close but it's a Go binary you have to
-download. `vs-cli` is a single Python file that runs anywhere Python 3.10+
-and `blessed` are available, which is basically everywhere.
-
-it's not trying to replace your IDE. it's the editor you reach for
-when you're already in the terminal and don't want to context-switch.
+- [What Is This?](#what-is-this)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Interface Layout](#interface-layout)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+  - [Global](#global)
+  - [Editor](#editor)
+  - [Explorer](#explorer)
+  - [Terminal Panel](#terminal-panel)
+  - [SmartBar (all modes)](#smartbar-all-modes)
+- [Features](#features)
+  - [Syntax Highlighting](#syntax-highlighting)
+  - [Undo / Redo](#undo--redo)
+  - [Bracket Auto-Close & Matching](#bracket-auto-close--matching)
+  - [Smart Indentation Detection](#smart-indentation-detection)
+  - [Smart Home Key](#smart-home-key)
+  - [Word Jump](#word-jump)
+  - [Git Gutter Indicators](#git-gutter-indicators)
+  - [Quick Open (Ctrl+P)](#quick-open-ctrlp)
+  - [Global Grep (Ctrl+F)](#global-grep-ctrlf)
+  - [Find & Replace (Alt+R)](#find--replace-altr)
+  - [Outline View (Ctrl+O)](#outline-view-ctrlo)
+  - [Sticky Scroll](#sticky-scroll)
+  - [Zen Mode (F11)](#zen-mode-f11)
+  - [Integrated Terminal Panel](#integrated-terminal-panel)
+  - [Command Palette](#command-palette)
+  - [File Explorer](#file-explorer)
+- [SmartBar Deep Dive](#smartbar-deep-dive)
+- [Supported Languages & File Icons](#supported-languages--file-icons)
+- [Color & Theme System](#color--theme-system)
+- [Architecture Overview](#architecture-overview)
+  - [EditorState](#editorstate)
+  - [FileTree](#filetree)
+  - [TermPanel](#termpanel)
+  - [SmartBar](#smartbar)
+  - [VsCli (Main)](#vscli-main)
+- [Rendering Engine](#rendering-engine)
+- [Known Limitations](#known-limitations)
+- [Configuration & Customization](#configuration--customization)
+- [FAQ](#faq)
+- [Contributing](#contributing)
 
 ---
 
-## installation
+## What Is This?
 
-### requirements
+`vs-cli` is a single-file, terminal-based code editor written in Python. It takes visual inspiration from VS Code — sidebar file explorer, git gutter, status bar, command palette, integrated terminal — and squeezes all of it into roughly 700 lines of pure Python with exactly one third-party dependency: [`blessed`](https://pypi.org/project/blessed/), a mature terminal control library.
 
-- Python 3.10+ (uses `match/case`, so 3.9 won't work. upgrade.)
-- `blessed` library
+It is designed for situations where you need a real editor but can't or don't want to run a full GUI:
+
+- SSH sessions on remote servers
+- Docker containers
+- CI/CD pipelines doing quick file edits
+- Minimal Linux environments without X11
+- Anywhere Vim feels like overkill and `nano` feels like underwhelm
+
+It is **not** designed to replace VS Code, Neovim, or Emacs for your daily driver. It has no plugin system, no LSP support, no multiple cursors, and no project-level configuration. It is a sharp, minimal tool for a specific job.
+
+---
+
+## Installation
+
+**Requirements:** Python 3.10 or newer (uses `match` statements).
 
 ```bash
 pip install blessed
 ```
 
-that's it. there's no `setup.py`, no `pyproject.toml`, no package to install.
-download the script, run it.
+That's it. No other dependencies. Download or clone the script and run it.
 
 ```bash
-# download
-curl -O https://example.com/vs_cli.py
-
-# or clone if you want the whole repo
-git clone https://github.com/you/vs-cli
+# clone
+git clone https://github.com/yourname/vs-cli
 cd vs-cli
 
-# run
-python vs_cli.py
+# or just grab the single file
+curl -O https://raw.githubusercontent.com/yourname/vs-cli/main/vs_cli.py
+```
+
+**Verify it works:**
+
+```bash
+python vs_cli.py .        # opens current directory
+```
+
+---
+
+## Quick Start
+
+```bash
+# Open a directory (file explorer on the left)
 python vs_cli.py /path/to/project
-python vs_cli.py /path/to/file.py
+
+# Open a specific file directly
+python vs_cli.py myfile.py
+
+# Open current directory
+python vs_cli.py
 ```
 
-## interface
-<img width="1920" height="954" alt="Screenshot_2026-03-12_20-40-11" src="https://github.com/user-attachments/assets/0f8e1947-7f0b-4b10-88f5-4c853fb98fb3" />
+On launch, if a directory is given, vs-cli opens the first file it finds in the explorer automatically. You're immediately in editor mode and can start typing.
 
-### make it a proper command
+**The five things you need to know to survive:**
 
-if you want to call it as `vs-cli` from anywhere:
-
-```bash
-# put it somewhere on your PATH
-cp vs_cli.py ~/.local/bin/vs-cli
-chmod +x ~/.local/bin/vs-cli
-
-# make sure ~/.local/bin is in PATH
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-
-# now you can just do:
-vs-cli
-vs-cli ~/projects/myapp
-vs-cli ~/projects/myapp/src/main.py
-```
-
-on macOS, use `~/.local/bin` or `/usr/local/bin`. your call.
+| Action | Key |
+|---|---|
+| Save | `Ctrl+S` |
+| Quit | `Ctrl+Q` |
+| Open file quickly | `Ctrl+P` |
+| Switch to file explorer | `F5` |
+| Switch back to editor | `F6` |
 
 ---
 
-## usage
+## Interface Layout
 
 ```
-vs-cli [path]
+┌──────────────────────────────────────────────────────────────────┐
+│  vs-cli  —  main.py*                                             │  ← title bar
+├──────────┬─┬──────┬──────────────────────────────────────────────┤
+│ EXPLORER │g│      │  1  import os                                │
+│          │u│  ln  │  2  import sys                               │
+│ ▸ src    │t│  nm  │  3                                           │  ← editor area
+│   main.py│t│  bs  │  4  def main():                              │
+│   utils.py│e│      │  5      pass                               │
+│ ▸ tests  │r│      │  6                                           │
+│          │ │      │                                              │
+├──────────┴─┴──────┴──────────────────────────────────────────────┤
+│ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ TERMINAL ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ │  ← terminal (optional)
+│   $ python main.py                                               │
+│   Hello, world                                                   │
+│ $ _                                                              │
+├──────────────────────────────────────────────────────────────────┤
+│  INSERT  ⎇ main  saved — main.py    Ln 4, Col 1  4spc  PY  UTF-8│  ← status bar
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-- `path` is a file or a directory.
-- if you pass a file, it opens that file directly and the explorer shows its parent directory.
-- if you pass a directory, the explorer shows that directory and opens the first file it finds.
-- if you pass nothing, it uses the current working directory.
+**Columns (left to right):**
 
-### examples
+- **Explorer (26 cols)** — file tree with expand/collapse. Hidden in zen mode.
+- **Git gutter (1 col)** — colored indicator per line. Hidden in zen mode.
+- **Divider (1 col)** — visual separator.
+- **Line numbers (5 cols)** — current line is highlighted bold.
+- **Editor area** — the rest of the terminal width.
 
-```bash
-# open current directory
-vs-cli
+**Status bar (bottom row):**
 
-# open a specific project
-vs-cli ~/projects/django-app
-
-# open a specific file
-vs-cli ~/projects/django-app/settings.py
-
-# pipe-friendly: no color output when stdout isn't a tty
-NO_COLOR=1 vs-cli
-```
+- Mode: `INSERT` / `EXPLORE` / `TERMINAL`
+- Branch: `⎇ main` (static placeholder — see [Known Limitations](#known-limitations))
+- Last message (saved, error, info)
+- Cursor position: `Ln N, Col N`
+- Indent info: `4spc` or `tab`
+- Language: `PY`, `JS`, `TS`, `JSON`, etc.
+- Encoding: always `UTF-8`
 
 ---
 
-## the interface
+## Keyboard Shortcuts
 
-the layout is fixed. there's no way to resize the panels. if you need that,
-you're using the wrong tool.
+### Global
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│ title bar        filename, dirty marker (*)                              │
-├──────────────┬───┬────┬─────────────────────────────────────────────────┤
-│              │   │    │                                                  │
-│  EXPLORER    │ │ │ ln │  editor content                                  │
-│              │   │    │                                                  │
-│  file tree   │   │    │  syntax-highlighted text                        │
-│              │   │    │  cursor shown as inverted block                 │
-│              │   │    │                                                  │
-├──────────────┴───┴────┴─────────────────────────────────────────────────┤
-│ ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ TERMINAL ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌ │
-│  scrollback output                                                       │
-│  $ command input_                                                        │
-├──────────────────────────────────────────────────────────────────────────┤
-│ status bar   mode  branch  message           position  lang  encoding   │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+These work regardless of which panel has focus.
 
-the terminal panel only appears when you open it with `F9` then `A`.
-the rest of the layout is always visible.
+| Key | Action |
+|---|---|
+| `F5` | Focus file explorer |
+| `F6` | Focus editor |
+| `Shift+F6` | Open command palette |
+| `F11` | Toggle zen mode |
+| `F9` → `A` | Open terminal panel |
+| `F9` → `C` | Close terminal panel |
+| `Ctrl+S` | Save current file |
+| `Ctrl+Q` | Quit |
+| `Ctrl+Z` | Undo |
+| `Ctrl+Y` | Redo |
+| `Ctrl+P` | Quick open (fuzzy file picker) |
+| `Ctrl+F` | Global grep across project |
+| `Ctrl+O` | Outline / symbol search |
+| `Alt+S` | Search in current file |
+| `Alt+W` | Go to folder (change explorer root) |
+| `Alt+R` | Find and replace in current file |
 
----
+### Editor
 
-## keybindings
+| Key | Action |
+|---|---|
+| `↑ ↓ ← →` | Move cursor |
+| `Ctrl+←` | Jump word left |
+| `Ctrl+→` | Jump word right |
+| `Home` | Smart home (indent → column 0 → indent) |
+| `End` | Move to end of line |
+| `Page Up / Page Down` | Scroll by page |
+| `Enter` | New line with smart indent |
+| `Tab` | Insert indent (spaces or tab, auto-detected) |
+| `Backspace` | Delete character left (or paired bracket) |
+| `Delete` | Delete character right |
 
-### global (work everywhere)
+### Explorer
 
-| key | action |
-|-----|--------|
-| `F5` | focus file explorer |
-| `F6` | focus editor |
-| `Shift+F6` | open command palette |
-| `F9` then `A` | open terminal panel |
-| `F9` then `C` | close terminal panel |
-| `Alt+S` | search in current file |
-| `Alt+W` | navigate to folder path |
-| `Ctrl+S` | save current file |
-| `Ctrl+Q` | quit |
+| Key | Action |
+|---|---|
+| `↑ / ↓` | Navigate file list |
+| `Enter` | Open file / expand or collapse directory |
+| `Backspace` | Navigate to parent directory |
 
-### editor
+### Terminal Panel
 
-| key | action |
-|-----|--------|
-| `↑ ↓ ← →` | move cursor |
-| `Ctrl+←` | jump word left |
-| `Ctrl+→` | jump word right |
-| `Home` | smart home (first press → indent, second press → col 0) |
-| `End` | end of line |
-| `PgUp / PgDn` | scroll fast (editor height - 2 rows) |
-| `Enter` | newline with auto-indent |
-| `Tab` | insert 2 spaces (no real tab characters, sorry not sorry) |
-| `Backspace` | delete char left / merge lines |
-| `Delete` | delete char right / merge lines |
+| Key | Action |
+|---|---|
+| `Enter` | Execute typed command |
+| `Backspace` | Delete last character |
+| `↑ / ↓` | Scroll terminal output |
+| `Esc` | Return focus to editor |
 
-### explorer
+### SmartBar (all modes)
 
-| key | action |
-|-----|--------|
-| `↑ ↓` | navigate file list |
-| `Enter` | open file / toggle directory |
-| `Backspace` | go to parent directory |
-
-### terminal panel
-
-| key | action |
-|-----|--------|
-| type normally | build up the command |
-| `Enter` | run the command |
-| `↑ ↓` | scroll through output |
-| `Backspace` | delete last char of input |
-| `Esc` | close terminal panel focus, back to editor |
-
-### smart bar (search / path / command palette)
-
-| key | action |
-|-----|--------|
-| type | filter results |
-| `↑ ↓` | navigate results |
-| `Enter` | confirm selection |
-| `Esc` | close without doing anything |
+| Key | Action |
+|---|---|
+| Type | Filter / search |
+| `↑ / ↓` | Navigate results |
+| `Enter` | Confirm selection |
+| `Esc` | Close SmartBar |
+| `Tab` | (Find+Replace only) Switch between find / replace fields |
 
 ---
 
-## features
+## Features
 
-### syntax highlighting
+### Syntax Highlighting
 
-supported languages:
+vs-cli ships a hand-rolled tokenizer — not a real parser, but it handles roughly 95% of real-world code correctly. The other 5% just loses color, which is fine.
 
-| extension | language |
-|-----------|----------|
-| `.js` `.ts` `.jsx` `.tsx` `.mjs` `.cjs` | JavaScript / TypeScript |
-| `.py` `.pyi` | Python |
-| `.json` `.jsonc` | JSON |
-| `.md` `.markdown` | Markdown |
-| `.sh` `.bash` `.zsh` | Shell |
-| `.html` `.htm` | HTML (no highlighting yet, just detected) |
-| `.css` `.scss` | CSS (same) |
-| `.rs` `.go` `.rb` `.cpp` `.c` `.h` | detected but no highlighting |
+**Supported languages:**
 
-the highlighter is a hand-rolled tokenizer, not a grammar-based parser.
-it handles the common cases well. it will do something wrong with
-nested template literals or multi-line strings in some edge cases.
-this is a known limitation and not something i'm going to apologize for.
+| Language | What gets highlighted |
+|---|---|
+| Python | Keywords, types, function names, strings, numbers, `#` comments |
+| JavaScript / TypeScript | Keywords, types, function names, strings, numbers, `//` comments |
+| JSON | Keys, string values, numeric / boolean / null values |
+| Markdown | Headings (`#`), bullet lists, inline code, bold |
+| Others (sh, html, css, rs, go…) | No highlighting — file type detected for icon/status bar only |
 
-what it highlights:
-- **keywords** — blue. language-specific.
-- **strings** — orange. handles `"double"`, `'single'`, and `` `backtick` `` quotes. respects escape sequences.
-- **numbers** — soft green. integers, floats, hex, scientific notation.
-- **comments** — gray. `//` line comments and `#` Python comments.
-- **function names** — yellow. any identifier immediately followed by `(`.
-- **type names** — teal. any identifier starting with an uppercase letter.
-- **JSON keys** — blue.
-- **Markdown headings** — blue + bold.
-- **Markdown bullets** — teal.
-- **Markdown inline code** — orange.
-- **Markdown bold** — bold.
+**Color palette (256-color):**
 
-### file explorer
+| Token type | Color |
+|---|---|
+| Keywords | Cyan (`#39`) |
+| Strings | Orange (`#214`) |
+| Numbers | Light green (`#150`) |
+| Comments | Gray (`#242`) |
+| Function names | Yellow (`#221`) |
+| Type names (PascalCase) | Green (`#78`) |
+| Markdown headings | Cyan (`#39`) |
+| Bracket match | Yellow on dark orange |
 
-the explorer shows a live view of the filesystem.
+Color output is automatically disabled if `NO_COLOR` is set, if stdout is not a TTY, or if the terminal doesn't advertise 256-color support.
 
-- directories and files are sorted: directories first, then files, both alphabetically.
-- certain directories are automatically hidden because no one wants to see them:
-  `.git`, `__pycache__`, `node_modules`, `venv`, `.venv`, `dist`, `build`, `.idea`, `.vscode`, `.tox`, `.mypy_cache`, `.pytest_cache`
-- dotfiles (anything starting with `.`) are also hidden.
-- expand/collapse directories with `Enter`.
-- the expanded state is remembered until you quit.
-- `Backspace` navigates to the parent directory, even above the initial root.
+### Undo / Redo
 
-### terminal panel
+The undo system uses a snapshot stack stored in a `deque` capped at 500 entries. Before every destructive operation (`insert`, `backspace`, `delete_fwd`, `newline`, `tab`), the editor takes a snapshot of the full line buffer plus cursor position.
 
-the terminal panel runs commands as subprocesses and captures their output.
-it's not a real PTY. it doesn't handle interactive programs (no `vim`, `htop`,
-`ssh`, `python -i`). it's for quick commands: `git status`, `ls`, `make`,
-`python script.py`, `grep -r something .`.
+**Deduplication:** If the same snapshot would be added twice consecutively (e.g., holding a key down), it is skipped. This prevents the undo stack from filling up with thousands of identical states during key repetition.
 
-- output is kept in a scrollback buffer of 2000 lines.
-- commands timeout after 30 seconds. if you need longer, run it in a real terminal.
-- the working directory is the explorer's current root. if you change root with
-  `Alt+W`, the terminal follows.
-- `F9` then `A` to open. `F9` then `C` to close. `Esc` to unfocus (panel stays open).
+**Redo:** Any new edit after an undo clears the redo stack — standard behavior. Redo only works when you have undone something without making new edits in between.
 
-the chord system works like this: press `F9`, release it, then press `A` or `C`.
-not a simultaneous chord. sequential. if you press `F9` and then something other
-than `A` or `C`, the key is processed normally.
+| Key | Action |
+|---|---|
+| `Ctrl+Z` | Undo last change |
+| `Ctrl+Y` | Redo |
 
-### command palette (`Shift+F6`)
+The undo stack is per-buffer and is cleared on file open. There is no persistent undo history across sessions.
 
-available commands:
+### Bracket Auto-Close & Matching
 
-| command | does |
-|---------|------|
-| `save` | write the buffer to disk |
-| `new` | open a new empty buffer (untitled.py) |
-| `help` | show the keybindings screen |
-| `git status` | run `git status --short` and show result in status bar |
-| `git log` | run `git log --oneline -10` and show result in status bar |
-| `exit` | quit |
+**Auto-close:** When you type an opening bracket or quote, the closing counterpart is inserted automatically and the cursor is placed between them.
 
-type to filter. `↑↓` to navigate. `Enter` to run. `Esc` to cancel.
+| Type | Inserted | Cursor ends up |
+|---|---|---|
+| `(` | `()` | between the parens |
+| `[` | `[]` | between the brackets |
+| `{` | `{}` | between the braces |
+| `"` | `""` | between the quotes |
+| `'` | `''` | between the quotes |
+| `` ` `` | ` `` ` | between the backticks |
 
-### search in file (`Alt+S`)
+**Skip-over:** If the cursor sits directly on a closing character that was auto-inserted, typing that character again moves the cursor past it instead of inserting a duplicate.
 
-opens a search bar anchored to the top of the editor.
-type your query. results show line numbers and matching lines.
-`↑↓` to navigate. `Enter` to jump to the selected line.
-`Esc` to cancel.
+**Auto-delete pair:** Pressing Backspace on an opening character when the cursor is directly between a matched pair deletes both characters simultaneously.
 
-case-insensitive. substring match. no regex (yet).
+**Visual matching:** When the cursor rests on any bracket character (`(`, `)`, `[`, `]`, `{`, `}`), the matching bracket is highlighted in yellow-on-brown. The search is depth-aware — nested brackets are handled correctly across multiple lines.
 
-### go to folder (`Alt+W`)
+### Smart Indentation Detection
 
-opens a path input pre-filled with the current explorer root.
-edit it, press `Enter`. if the path is a valid directory, the
-explorer navigates there. if not, you get an error in the status bar.
-supports `~` expansion.
+On file load, vs-cli scans the first 200 lines to detect whether the file uses tabs or spaces for indentation. For spaces, it finds the most common indent width (typically 2 or 4).
 
-### auto-indent
+The detected settings appear in the status bar (`4spc` or `tab`) and apply to:
 
-when you press `Enter`, the new line is indented to match the current line's
-indentation. it counts leading spaces and replicates them. it doesn't try to
-be smart about brackets or colons. that's a job for a real language server.
+- `Tab` key — inserts the correct number of spaces or a literal tab
+- `Enter` key — continues the current line's indentation on the new line
 
-### smart home
+**Auto-indent on Enter:** After a line ending in `:` (Python block opener) or `{` (C-style opener), the next line is automatically indented one level deeper.
 
-pressing `Home` on a line with leading whitespace moves the cursor to the
-first non-whitespace character. pressing it again moves to column 0.
-if you're already at the indent level, it goes to column 0 directly.
-this is how most decent editors behave and i'm not going to justify it further.
+### Smart Home Key
 
-### dirty file marker
+The `Home` key cycles through two positions:
 
-when the buffer has unsaved changes, the title bar shows a `*` after the
-filename. it goes away when you save. obvious, but it's there.
+1. If cursor is **not** at the first non-whitespace character → move there
+2. If cursor **is** at the first non-whitespace character → move to column 0
 
----
+This lets you quickly toggle between the indented code start and the absolute line start, matching the behavior found in VS Code and most modern editors.
 
-## color support
+### Word Jump
 
-color is auto-detected at startup:
+`Ctrl+←` and `Ctrl+→` move the cursor by word boundaries. Alphanumeric characters (`a-z`, `A-Z`, `0-9`, `_`) form words; punctuation and whitespace act as delimiters.
 
-1. if `NO_COLOR` is set in the environment, no colors. ever.
-2. if `COLORTERM` is `truecolor` or `24bit`, colors.
-3. if `TERM` contains `256color` or `color`, or is `xterm`, `screen`, or `tmux`, colors.
-4. if stdout is a tty, colors.
-5. otherwise, no colors. the editor still works, it's just not pretty.
+### Git Gutter Indicators
 
-if your terminal shows garbage like `38B;5B;39m` in the text, it means the
-terminal isn't interpreting ANSI escape codes. set `TERM=xterm-256color` before
-running:
+On file open and on every save, vs-cli runs `git diff --unified=0` against the current file and parses the unified diff output to map which lines have changed relative to the last commit.
 
-```bash
-export TERM=xterm-256color
-vs-cli
-```
+Changes are shown as a single colored character in the 1-column gutter between the explorer and line numbers:
 
-or just set `NO_COLOR=1` and use it without colors:
+| Indicator | Color | Meaning |
+|---|---|---|
+| `▌` | Green | Line was added (not in last commit) |
+| `▌` | Yellow | Line was modified |
+| `▾` | Red | A line was deleted just below this position |
 
-```bash
-NO_COLOR=1 vs-cli
-```
+The gutter is silently skipped (stays blank) if the file is not in a git repository, if `git` is not on `$PATH`, or if the diff command times out (3 second timeout).
 
----
+### Quick Open (`Ctrl+P`)
 
-## architecture
+Opens a floating SmartBar. As you type, it performs a fuzzy filename search across the entire project tree (up to 2000 files scanned, 50 results shown at most).
 
-the code is structured into these pieces:
+The fuzzy match requires every character you type to appear somewhere in the filename. For example, typing `mnpy` would match `main.py`. The match is against the filename only, not the full path.
 
-```
-vs_cli.py
-│
-├── color detection & ANSI helpers      ~30 lines
-│   pure functions. no state.
-│
-├── syntax highlighting                 ~100 lines
-│   _hl_code()   — JS and Python tokenizer
-│   _hl_json()   — JSON regex + checks
-│   _hl_md()     — Markdown regex
-│   highlight()  — dispatcher with try/except guard
-│
-├── EditorState                         ~80 lines
-│   the text buffer. list of strings + cursor + scroll.
-│   load(), save(), insert(), backspace(), delete_fwd(),
-│   newline(), move(), page(), home(), end(),
-│   word_left(), word_right()
-│
-├── FileTree                            ~60 lines
-│   flat list of nodes rebuilt on every toggle.
-│   _open is a set of string paths for expanded dirs.
-│   toggle(), go_up(), move(), current(), refresh()
-│
-├── TermPanel                           ~40 lines
-│   deque of output lines. blocking subprocess.run().
-│   run(), type(), bs(), up(), dn()
-│
-├── SmartBar                            ~40 lines
-│   three modes: SEARCH, PATH, CMD.
-│   open(), close(), active(), type(), bs(), nav(),
-│   update(), hit_line(), hit_cmd()
-│
-└── VsCli                               ~300 lines
-    owns everything, does rendering and input.
-    render()          — builds one big string, writes once
-    _draw_terminal()  — terminal panel section
-    _draw_bar()       — floating input overlay
-    _sync()           — viewport scroll adjustment
-    handle()          — input dispatch with match/case
-    _bar_confirm()    — confirm smart bar action
-    _exec()           — execute command palette commands
-    run()             — main loop
-```
+Navigate results with `↑ / ↓`, open the selected file with `Enter`.
 
-### rendering strategy
+Directories listed in `_SKIP` (`.git`, `node_modules`, `__pycache__`, `venv`, and others) are excluded from the search.
 
-`render()` builds a list of strings, joins them, and writes to stdout in
-one `sys.stdout.write()` call. this is intentional. multiple small writes
-cause flickering because the terminal redraws between writes. one big write
-is atomic enough that flicker is imperceptible at normal frame rates.
+### Global Grep (`Ctrl+F`)
 
-the frame rate is roughly 20fps (50ms timeout on `inkey()`). this is more
-than enough for a text editor.
+Invokes the system `grep -rn` binary to search all text files in the project for the query string. Results appear in the format `filename:line_number:content`, up to 100 results, with a 10-second timeout.
 
-### why not curses
+Selecting a result and pressing `Enter` opens the file and jumps directly to that line number.
 
-`curses` is in the standard library, which is nice. it's also annoying to
-use correctly, has inconsistent behavior across platforms, and requires you
-to think about windows and panels as objects. `blessed` gives you the ANSI
-escape sequences you actually need without the abstraction overhead. and it
-handles terminal capability detection (the `terminfo` stuff) so i don't have to.
+Requires `grep` on `$PATH`. Falls back gracefully with empty results if grep is unavailable.
 
-### why not textual or rich
+### Find & Replace (`Alt+R`)
 
-they're great libraries. they're also the wrong tool here. `textual` has
-an event loop, widgets, CSS-like styling, reactivity. for a text editor
-that needs to be a single script, that's too much machinery. the whole point
-is simplicity.
+Opens a two-field SmartBar. Use `Tab` to switch between the **find** field and the **replace** field.
+
+Pressing `Enter` performs a **replace-all** — every occurrence of the find string in the current buffer is replaced in a single operation. The replacement is case-sensitive and plain-string only (no regular expressions). The operation is a single undoable step.
+
+The results panel shows a live preview of all matching lines as you type in the find field.
+
+### Outline View (`Ctrl+O`)
+
+Scans the current file for function and class definitions and presents them as a navigable list. Supports Python and JavaScript/TypeScript.
+
+**Python:** Detects `def` and `class` keywords at any indentation level. Nesting is reflected with `⬢` for functions and `⬡` for classes, indented proportionally.
+
+**JavaScript/TypeScript:** Detects `function name()`, `const name = () =>` / `const name = async () =>`, and `class Name`.
+
+Select a symbol and press `Enter` to jump directly to its definition line.
+
+### Sticky Scroll
+
+When the editor is scrolled down past a function or class definition, that definition line is pinned to the top row of the editor area. This shows you which function body you are currently inside without requiring you to scroll back up — the same feature VS Code calls "sticky scroll."
+
+Works for Python (`def`, `class`) and JavaScript/TypeScript (`function`, `class`, `async function`). Disabled in zen mode and on the help screen.
+
+### Zen Mode (`F11`)
+
+Hides the sidebar, git gutter, and status bar. The editor takes the full terminal width. Visual noise is minimized. The title bar remains visible and shows `[zen]`.
+
+Toggle on and off with `F11` at any time. All other features continue to work normally in zen mode.
+
+### Integrated Terminal Panel
+
+The terminal panel opens at the bottom of the screen (12 rows tall, configurable via `TERM_H`). Commands are run via blocking `subprocess.run()` with a 30-second timeout.
+
+This is **not** a PTY. Practical consequences:
+
+| Works | Does not work |
+|---|---|
+| `ls`, `pwd`, `cat`, `grep` | `vim`, `nano`, `htop` |
+| `python script.py` (non-interactive) | `python` REPL |
+| `git status`, `git log`, `git diff` | `ssh` sessions |
+| `npm test`, `pytest`, `make` | `less`, `more`, `man` |
+| `pip install`, `npm install` | `top`, `watch` |
+
+The panel maintains a scrollback buffer of 2000 lines. Use `↑ / ↓` to scroll through output.
+
+The working directory is the project root and updates when you navigate to a different folder via `Alt+W`.
+
+**Open:** `F9` then `A`  
+**Close:** `F9` then `C`  
+**Return focus to editor:** `Esc`
+
+### Command Palette
+
+Accessible via `Shift+F6`. Provides a searchable list of built-in commands:
+
+| Command | Description |
+|---|---|
+| `save` | Write buffer to disk |
+| `new` | Create empty buffer |
+| `help` | Show keybinding reference screen |
+| `outline` | Open symbol outline |
+| `git status` | Show short git status in status bar |
+| `git log` | Show last 10 commits (one-line format) in status bar |
+| `zen` | Toggle zen mode |
+| `exit` | Quit |
+
+Type to filter the list. Navigate with `↑ / ↓`, run with `Enter`.
+
+### File Explorer
+
+The left-side panel shows a recursive file tree starting from the project root. Directories sort before files; all names are sorted alphabetically within their group.
+
+**Hidden automatically:** `.git`, `__pycache__`, `.DS_Store`, `node_modules`, `.pytest_cache`, `.mypy_cache`, `venv`, `.venv`, `.tox`, `.idea`, `.vscode`, `dist`, `build`, and any file/directory whose name starts with `.`.
+
+**Navigation:**
+
+- `↑ / ↓` to move through the list
+- `Enter` on a directory to expand or collapse it
+- `Enter` on a file to open it in the editor (also switches focus to editor)
+- `Backspace` to navigate to the parent directory
+
+Switch to the explorer with `F5`; return to editor with `F6`.
 
 ---
 
-## known limitations
+## SmartBar Deep Dive
 
-- **no multiple open files / tabs.** one buffer at a time. open a different
-  file via the explorer.
+The SmartBar is the unified floating input widget used for all modal interactions. It renders as a rounded box (`╭─╮`) overlaid on the editor, with a title, input field, results list, and hint line at the bottom.
 
-- **no undo.** i know. it's on the list. for now, Ctrl+Z in the terminal
-  panel can sometimes save you, but the editor itself has no undo history.
+There are seven modes:
 
-- **no find & replace.** search (Alt+S) is read-only, jump-to-line only.
+| Mode constant | Trigger | What it does |
+|---|---|---|
+| `SEARCH` | `Alt+S` | Incremental search in current file |
+| `PATH` | `Alt+W` | Navigate to a directory by path |
+| `CMD` | `Shift+F6` | Command palette |
+| `OPEN` | `Ctrl+P` | Fuzzy file quick-open |
+| `GREP` | `Ctrl+F` | Global grep across project |
+| `REPLACE` | `Alt+R` | Find and replace (two-field input) |
+| `OUTLINE` | `Ctrl+O` | Symbol / function outline |
 
-- **no clipboard integration.** there's no way to cut/copy/paste text between
-  the editor and other applications. the terminal's own selection still works
-  for reading, but the editor doesn't know about it.
+All modes share the same keyboard interface: type to filter, `↑ / ↓` to navigate results, `Enter` to confirm, `Esc` to dismiss without action.
 
-- **terminal panel is not a PTY.** interactive programs don't work in it.
-  `python -i`, `ssh`, `vim`, `top`, `less` — don't try. use a real terminal
-  for those.
-
-- **no config file.** keybindings, colors, tab size — all hardcoded.
-  the tab size is 2 spaces. if you want 4, change the one line of code that
-  says `ed.insert(' '); ed.insert(' ')`. i'm not adding a config system.
-
-- **no syntax highlighting for C, Go, Rust, etc.** the tokenizer only handles
-  JS/TS, Python, JSON, and Markdown. other file types are detected and opened
-  but shown without colors.
-
-- **highlighting breaks on some edge cases.** multi-line strings across
-  multiple screen lines won't be colored correctly. triple-quoted Python
-  strings that start on a visible line and end off-screen will look wrong.
-  this is a fundamental limitation of line-by-line highlighting.
-
-- **no line wrapping.** long lines are truncated at the viewport edge.
-  horizontal scrolling works (the viewport follows the cursor), but there's
-  no word wrap mode.
-
-- **performance on huge files.** files with tens of thousands of lines are
-  fine. files with hundreds of thousands of lines might make the cursor
-  noticeably sluggish because the buffer is a plain Python list and
-  operations like `list.insert()` are O(n). this is an acceptable trade-off
-  for a script editor, not for opening kernel source trees.
+`REPLACE` mode is the only two-field mode — `Tab` switches between the find and replace inputs, each with its own cursor indicator.
 
 ---
 
-## troubleshooting
+## Supported Languages & File Icons
 
-### colors look wrong / show garbage characters
+### Language Detection
 
-your terminal isn't handling ANSI escape codes correctly. try:
+Language is determined strictly by file extension:
 
-```bash
-# option 1: tell it what kind of terminal it is
-export TERM=xterm-256color
-vs-cli
+| Extensions | Language ID | Highlighting |
+|---|---|---|
+| `.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.cjs` | `js` | Yes |
+| `.py`, `.pyi` | `py` | Yes |
+| `.json`, `.jsonc` | `json` | Yes |
+| `.md`, `.markdown` | `md` | Yes |
+| `.sh`, `.bash`, `.zsh` | `sh` | No |
+| `.html`, `.htm` | `html` | No |
+| `.css`, `.scss` | `css` | No |
+| `.rs` | `rs` | No |
+| `.go` | `go` | No |
+| `.rb` | `rb` | No |
+| `.cpp`, `.c`, `.h` | `cpp` / `c` | No |
+| `.toml` | `toml` | No |
+| `.yaml`, `.yml` | `yaml` | No |
 
-# option 2: disable color entirely
-NO_COLOR=1 vs-cli
+Files with unrecognized extensions are treated as plain text.
 
-# check what blessed thinks about your terminal
-python3 -c "
-from blessed import Terminal
-t = Terminal()
-print('does_styling:', t.does_styling)
-print('number_of_colors:', t.number_of_colors)
-print('TERM:', __import__(\"os\").environ.get('TERM'))
-"
+### File Icons (in explorer)
+
+Three-character labels shown before filenames in the explorer sidebar:
+
+```
+.js  → JS    .ts  → TS    .py  → PY    .rs  → RS
+.go  → GO    .rb  → RB    .c   → C     .cpp → C+
+.h   → H     .json→ {}    .md  → MD    .css → CS
+.html→ HT    .sh  → SH    .txt → TX    .yml → YM
+.env → EN    .toml→ TM    .lock→ LK
 ```
 
-### editor is blank / shows nothing
-
-blessed probably failed to detect the terminal size. check:
-
-```bash
-echo $COLUMNS $LINES
-tput cols; tput lines
-```
-
-if those return nothing, your terminal isn't reporting its size. try
-resizing the window, or set them manually:
-
-```bash
-export COLUMNS=220
-export LINES=50
-vs-cli
-```
-
-### F9 chord isn't working
-
-some terminals intercept F9 before it reaches the application, or map it
-to something else. check if `F9` is being received:
-
-```bash
-python3 -c "
-import os; os.environ.setdefault('TERM','xterm-256color')
-from blessed import Terminal
-t = Terminal()
-print('press F9 then a key. Ctrl+C to exit.')
-with t.raw():
-    while True:
-        k = t.inkey(timeout=5)
-        if k: print(repr(k), repr(str(k)), k.name)
-"
-```
-
-if F9 doesn't show up, your terminal is eating it. check your terminal's
-keybinding settings.
-
-### Shift+F6 isn't working
-
-`Shift+F6` sends different escape sequences on different terminals.
-vs-cli listens for `\x1b[17;2~` and `\x1b[1;2Q`. if your terminal sends
-something else, look at what it sends (use the debug script above), find
-the line in `handle()` that checks `raw in ('\x1b[17;2~', '\x1b[1;2Q')`,
-and add your terminal's sequence.
-
-### file shows as modified but i didn't change anything
-
-some OS or editor tools modify files without the editor knowing. the
-modified marker is set whenever you type anything in the buffer. it's
-cleared on load and on save. if you open a file, don't touch it, and see
-`*`, file an issue.
-
-### terminal panel says "command not found" for something that works normally
-
-the terminal panel inherits the environment from the Python process that
-started vs-cli, but `PATH` might be different from your interactive shell.
-check:
-
-```bash
-# in the terminal panel, type:
-echo $PATH
-
-# compare to your shell's PATH
-# in your real terminal:
-echo $PATH
-```
-
-if they differ, source your shell config first:
-
-```bash
-# start vs-cli with the right environment
-bash -i -c 'vs-cli'
-```
+Directories show `▸ ` when collapsed and `▾ ` when expanded.
 
 ---
 
-## contributing
+## Color & Theme System
 
-the code is one file and it's meant to stay that way (roughly). a few
-things i'd actually accept:
+vs-cli uses ANSI 256-color escape codes. Color output is automatically detected and disabled gracefully if not supported.
 
-- real undo (a list of `(operation, args)` tuples, bounded to ~1000 entries)
-- horizontal scrolling improvements
-- additional syntax highlighting languages using the existing `_hl_code()` framework
-- bug fixes for the highlighter's edge cases
-- anything that makes the terminal panel more robust without adding a PTY dependency
+**Detection logic (evaluated in order):**
 
-a few things i will not accept:
+1. `NO_COLOR` environment variable is set → disable all color
+2. `COLORTERM=truecolor` or `COLORTERM=24bit` → enable
+3. `$TERM` contains `256color` → enable
+4. `$TERM` is `xterm`, `screen`, or `tmux` → enable
+5. `stdout` is a TTY → enable
+6. Otherwise → disable (no escape codes emitted at all)
 
-- configuration files / settings system
-- plugin architecture
-- multiple tabs or split panes
-- anything that requires adding a dependency beyond `blessed`
-- LSP integration
-- tree-sitter
-- anything that makes the file longer than ~1200 lines
+When color is disabled, all output is plain text with no formatting. The editor remains fully functional.
 
-if you find a bug, describe it concisely and include the Python version,
-OS, and terminal emulator. "it doesn't work" is not a bug report.
+The terminal type is forced to `xterm-256color` at startup via `os.environ.setdefault('TERM', 'xterm-256color')` if not already set.
 
 ---
 
-## license
+## Architecture Overview
 
-do what you want with it.
-if it deletes your files, that's your problem.
-if it works great, that's my problem for not adding warranty disclaimers.
+vs-cli is structured as five cooperating classes plus a collection of module-level utility functions.
+
+```
+VsCli  (main application loop)
+├── Terminal          (blessed — terminal I/O, size, key input)
+├── FileTree          (directory tree, expand/collapse, navigation)
+├── EditorState       (buffer, cursor, undo/redo, all editing operations)
+├── SmartBar          (floating modal input, seven modes)
+└── TermPanel         (integrated terminal, subprocess runner)
+```
+
+Module-level functions handle syntax highlighting, git diff parsing, outline building, file icon lookup, and language detection — none of these need instance state.
+
+### EditorState
+
+The heart of the editor. Stores the document as a Python list of strings (`self.lines`), one string per line. Cursor is `(cy, cx)` — row and column, 0-indexed. Scroll offset is `(sy, sx)` — the top-left visible position.
+
+**Undo stack:** A `deque(maxlen=500)` storing `(lines_copy, cy, cx)` tuples. A snapshot is taken before every destructive operation. The `_last_snap` field prevents duplicate snapshots from held keys.
+
+Key methods:
+
+| Method | What it does |
+|---|---|
+| `load(path)` | Read file, detect indent style, reset all state |
+| `save()` | Write `'\n'.join(lines)` to disk |
+| `insert(ch)` | Insert character with auto-close logic |
+| `backspace()` | Delete with pair-deletion logic |
+| `newline()` | Smart newline with auto-indent |
+| `tab()` | Insert aligned spaces or a tab character |
+| `move(dy, dx)` | Move cursor, clamp to buffer bounds |
+| `home()` | Smart home toggle |
+| `word_left()` / `word_right()` | Jump by word boundaries |
+| `find_bracket_match()` | Depth-aware bracket search → `(row, col)` or `None` |
+| `_snap()` | Save undo snapshot |
+| `undo()` / `redo()` | Restore from snapshot stack |
+| `_detect_indent()` | Scan first 200 lines to infer tab/space and width |
+
+### FileTree
+
+Maintains the directory tree as a flat list of item dicts, regenerated on every `refresh()`. Each item:
+
+```python
+{
+  'path':     Path,
+  'depth':    int,
+  'is_dir':   bool,
+  'expanded': bool
+}
+```
+
+The set of expanded directories is tracked in `self._open` (a `set` of path strings) so it survives refreshes. Scrolling is managed by `self.scroll` (index of first visible item).
+
+### TermPanel
+
+Wraps `subprocess.run()` for blocking command execution. stdout + stderr are combined and appended line-by-line to a `deque(maxlen=2000)` scrollback buffer. Commands have a 30-second hard timeout.
+
+The working directory (`self.cwd`) is updated whenever the user navigates to a new root via `Alt+W`.
+
+### SmartBar
+
+A state machine with seven modes. Holds the current text input, a results list, and a selected index. The `update()` method recomputes results on every keystroke using the appropriate strategy for the current mode.
+
+Replace mode is special: it carries two text fields (`text` for find, `replace_text` for replace) and a `replace_field` integer toggle (0 or 1).
+
+### VsCli (Main)
+
+Owns all other components. Its main loop:
+
+```python
+while running:
+    _sync()    # reconcile scroll positions
+    render()   # draw the entire screen
+    key = t.inkey(timeout=0.05)
+    if key:
+        msg_err = False
+        msg = ''
+        handle(key)
+```
+
+`handle()` dispatches to the appropriate subsystem based on focus state and key identity. Global shortcuts are checked first before focus-specific dispatch.
 
 ---
 
-## acknowledgments
+## Rendering Engine
 
-`blessed` by Jeff Quast does the actual terminal work.
-the rest is just string concatenation.
+The renderer uses absolute cursor positioning (`t.move(row, col)`) to write every visible cell, top to bottom, left to right. The entire visible screen is unconditionally redrawn every frame — there is no diffing.
+
+**Why full redraws?** At 20fps (50ms poll timeout), redrawing a typical 80×40 terminal takes well under 2ms of string work. The simplicity of unconditional redraws outweighs the marginal performance gain of a diff renderer, which would require significantly more code and state.
+
+**Flicker prevention:** All output for a single frame is accumulated into a Python list, joined with `''.join()`, and emitted in a single `sys.stdout.write()` call. From the terminal emulator's perspective this write is atomic, preventing partial-draw flicker.
+
+**Layer order** (later items paint over earlier ones):
+
+1. Title bar
+2. Sidebar / file tree
+3. Git gutter
+4. Divider
+5. Line numbers
+6. Editor content (syntax highlighted)
+7. Sticky scroll pin (if active and viewport scrolled)
+8. Cursor block
+9. Bracket match highlight
+10. Terminal panel (if open)
+11. Status bar
+12. SmartBar floating box (if active — always topmost)
+
+---
+
+## Known Limitations
+
+- **No PTY in terminal panel.** Interactive programs (`vim`, `htop`, `less`, `ssh`, Python REPL) will not work correctly. The terminal is for non-interactive commands only.
+- **Branch name is static.** The status bar always shows `⎇ main`. It does not query git for the actual branch name.
+- **No multi-file editing / tabs.** Only one buffer is open at a time. Quick-open replaces the current buffer.
+- **No selection, cut, copy, or paste.** There is no visual selection mode. Your terminal emulator's native mouse selection still works for copying text out of the editor.
+- **No syntax highlighting for most languages.** Only Python, JavaScript/TypeScript, JSON, and Markdown have highlighters. All others render as plain text.
+- **Highlighting is not a real parser.** The tokenizer is regex and state-machine based. Multiline strings, complex escape sequences, and edge cases in real code may be colored incorrectly.
+- **Undo history is not persistent.** Closing and reopening a file resets the undo stack.
+- **No word wrap.** Long lines are horizontally scrollable but not wrapped.
+- **No regex search or replace.** All searches (in-file, grep, replace) are plain string matching.
+- **Replace is case-sensitive only.** There is no case-insensitive replace option.
+- **Outline view supports Python and JS/TS only.** Other languages show an empty outline.
+- **Terminal timeout is 30 seconds.** Long-running commands are killed. There is no way to cancel a running command mid-execution or send input to it.
+- **No save-as dialog.** Saving always writes to the current `filepath`. Changing the filename requires editing the buffer's `filepath` attribute in code.
+
+---
+
+## Configuration & Customization
+
+There is no configuration file. All defaults are hardcoded as class-level constants and module-level dicts. To change them, edit the source.
+
+**Key constants:**
+
+```python
+# VsCli class — layout dimensions
+SW     = 26   # sidebar width in columns
+LW     = 5    # line number gutter width in columns
+GW     = 1    # git gutter width in columns
+TERM_H = 12   # terminal panel height in rows
+
+# Module level — undo stack size
+_UNDO_LIMIT = 500
+
+# Module level — directories hidden from file tree
+_SKIP = frozenset((
+    '.git', '__pycache__', 'node_modules', 'venv', ...
+))
+```
+
+**To add a new language for syntax highlighting:**
+
+1. Add the extension(s) to `_EXT_LANG`
+2. Write a `_hl_yourlang(line: str) -> str` function
+3. Add a branch for it in the `highlight()` dispatcher
+
+**To add a new command to the command palette:**
+
+1. Add a `('command_name', 'description')` tuple to `_CMDS`
+2. Handle the command string in `VsCli._exec()`
+
+**To add a new file icon:**
+
+Add an entry to `_EXT_ICON` — keys are lowercase extensions with the leading dot (e.g., `'.kt'`), values are 3-character strings.
+
+---
+
+## FAQ
+
+**Q: Why `blessed` and not `curses`?**
+
+`blessed` is a thin, well-maintained wrapper around curses providing a cleaner API for terminal size, key input, and ANSI codes. It handles platform differences more gracefully than raw curses. The package is tiny (~50KB installed) with no transitive dependencies.
+
+**Q: Does this work on Windows?**
+
+Possibly, with Windows Terminal or WSL. Native cmd.exe / PowerShell have limited ANSI support and may not render correctly. This is not tested or officially supported.
+
+**Q: Does this work over SSH?**
+
+Yes — this is one of the primary use cases. You need Python 3.10+ and `blessed` installed on the remote machine.
+
+**Q: Can I open multiple files at once?**
+
+Not currently. Only one buffer exists at a time. Use the file explorer (`F5`) or Quick Open (`Ctrl+P`) to switch files.
+
+**Q: Why does the terminal panel kill my process after 30 seconds?**
+
+The terminal uses blocking `subprocess.run()` with a fixed timeout to keep the implementation simple and avoid zombie processes. If you need to run a long command, use a separate terminal window.
+
+**Q: How do I create a new file?**
+
+Run the `new` command from the command palette (`Shift+F6` → type `new` → `Enter`). This opens an untitled Python buffer. Save it with `Ctrl+S`.
+
+**Q: The colors look wrong / garbled.**
+
+Make sure your terminal advertises 256-color support. Set `TERM=xterm-256color` before running if needed. Set `NO_COLOR=1` to disable all color output and get plain text.
+
+**Q: Why does `Home` not go to column 0?**
+
+`Home` is a smart toggle: first press goes to the first non-whitespace character, second press goes to column 0. This matches the behavior in VS Code, JetBrains IDEs, and many other editors. If you are already at the indent position, it goes to column 0. Press it again to return.
+
+**Q: What does the `*` in the title bar mean?**
+
+The asterisk after the filename indicates unsaved changes. It disappears when you save with `Ctrl+S`.
+
+---
+
+## Contributing
+
+The codebase is intentionally a single file with minimal abstractions. Before contributing, please consider whether your change can be done without:
+
+- Adding new dependencies
+- Introducing a config file system
+- Splitting into multiple files
+- Adding more than ~50 lines of code
+
+Good candidates for contribution:
+
+- Additional syntax highlighters (keeping the hand-rolled per-line approach)
+- Dynamic branch name detection via `git branch --show-current`
+- Save-as dialog (a new SmartBar mode with a path input)
+- Case-insensitive search toggle
+- Line count and file size in the status bar
+- Configurable key bindings via environment variables or a dotfile
+
+**The single-file constraint is intentional and non-negotiable.** The entire value proposition of vs-cli is that you can `curl` one file onto a server and have a working editor. Please respect this.
+
+---
+
+## License
+
+MIT. Do what you want. Attribution appreciated but not required.
+
+---
+
+*vs-cli — because sometimes you just need an editor that works.*
