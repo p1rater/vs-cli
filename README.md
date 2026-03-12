@@ -63,6 +63,9 @@ python vs_cli.py /path/to/project
 python vs_cli.py /path/to/file.py
 ```
 
+## interface
+<img width="1920" height="954" alt="Screenshot_2026-03-12_20-40-11" src="https://github.com/user-attachments/assets/0f8e1947-7f0b-4b10-88f5-4c853fb98fb3" />
+
 ### make it a proper command
 
 if you want to call it as `vs-cli` from anywhere:
