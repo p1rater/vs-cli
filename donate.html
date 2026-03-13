@@ -102,30 +102,36 @@
     .card {
       background: var(--header-bg);
       border: 1px solid var(--border);
-      padding: 20px;
+      padding: 24px;
       text-align: center;
-      transition: border-color 0.2s;
+      transition: all 0.2s ease;
     }
-    .card:hover { border-color: var(--green); }
-    .card-icon { font-size: 2rem; margin-bottom: 10px; display: block; }
-    .card-title { font-family: var(--mono); color: var(--yellow); margin-bottom: 15px; display: block; }
+    .card:hover { 
+      border-color: var(--green); 
+      transform: translateY(-2px);
+      background: var(--bg3);
+    }
+    .card-icon { font-size: 2.2rem; margin-bottom: 12px; display: block; }
+    .card-title { font-family: var(--mono); color: var(--yellow); margin-bottom: 10px; display: block; font-weight: 700; }
     
     .btn {
       display: inline-block;
       background: var(--green3);
       color: var(--green);
-      padding: 8px 16px;
+      padding: 10px 20px;
       font-family: var(--mono);
       font-size: 0.85rem;
       border: 1px solid var(--green2);
       cursor: pointer;
+      font-weight: 600;
+      margin-top: 10px;
     }
     .btn:hover { background: var(--green2); color: #fff; text-decoration: none; }
 
     .crypto-addr {
       background: var(--bg);
       border: 1px dashed var(--text3);
-      padding: 8px;
+      padding: 10px;
       font-family: var(--mono);
       font-size: 0.75rem;
       color: var(--cyan);
@@ -167,8 +173,8 @@
 
 <main>
   <div class="hero-text">
-    Open source is fueled by coffee and server costs. <br>
-    If <strong>vs-cli</strong> saved you time, consider fueling the project.
+    Open source is fueled by curiosity and coffee. <br>
+    If <strong>vs-cli</strong> makes your terminal life easier, consider supporting the project.
   </div>
 
   <div class="box">
@@ -178,15 +184,15 @@
         
         <div class="card">
           <span class="card-icon">☕</span>
-          <span class="card-title">Buy me a coffee</span>
-          <p style="font-size: 0.8rem; color: var(--text2); margin-bottom: 15px;">One-time support for the developer.</p>
-          <a href="https://buymeacoffee.com/yourprofile" class="btn">Support via BMC</a>
+          <span class="card-title">Kreosus</span>
+          <p style="font-size: 0.8rem; color: var(--text2); margin-bottom: 15px;">Türkiye'den banka kartı/havale ile bir kahve ısmarla.</p>
+          <a href="https://kreosus.com/@p1rater" class="btn">Destek Ol</a>
         </div>
 
         <div class="card">
           <span class="card-icon">💖</span>
           <span class="card-title">GitHub Sponsors</span>
-          <p style="font-size: 0.8rem; color: var(--text2); margin-bottom: 15px;">Monthly backing for long-term health.</p>
+          <p style="font-size: 0.8rem; color: var(--text2); margin-bottom: 15px;">Aylık destekçi olarak projenin sürdürülebilirliğine katkıda bulun.</p>
           <a href="https://github.com/sponsors/p1rater" class="btn">Sponsor on GitHub</a>
         </div>
 
@@ -197,7 +203,7 @@
   <div class="box">
     <div class="box-title">▸ Crypto Endowment</div>
     <div class="box-body">
-      <p style="font-size: 0.85rem; margin-bottom: 15px;">Minimalist funding for a minimalist editor.</p>
+      <p style="font-size: 0.85rem; margin-bottom: 15px; color: var(--text2);">Direct, borderless support via cryptocurrency.</p>
       
       <div style="margin-bottom: 15px;">
         <span style="font-size: 0.75rem; color: var(--text3); text-transform: uppercase;">Bitcoin (BTC)</span>
@@ -211,13 +217,13 @@
     </div>
   </div>
 
-  <div style="text-align: center; color: var(--text3); font-size: 0.8rem; font-style: italic;">
-    Thank you for keeping the terminal lean.
+  <div style="text-align: center; color: var(--text3); font-size: 0.8rem; font-style: italic; margin-top: 20px;">
+    Every contribution helps keep the terminal flicker-free.
   </div>
 </main>
 
 <footer>
-  BlueArch Project &copy; 2026 · Built with Source Code Pro
+  BlueArch Project &copy; 2026 · <a href="index.html">vs-cli.bluearch.network</a>
 </footer>
 
 </body>
